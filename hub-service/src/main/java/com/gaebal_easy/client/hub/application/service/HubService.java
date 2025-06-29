@@ -109,12 +109,12 @@ public class HubService {
                     .state(ReservationState.RESERVE)
                     .build();
 
-            if(tempStock == 0) {
+            if(tempStock == 0L) {
                 stockState = ReservationState.RE_FILL;
                 reservations.add(ReservationDto.from(reservation));
                 reservation.changeState(ReservationState.RE_FILL);
             }
-            else if (tempStock < 0) {
+            else if (tempStock < 0L) {
                 // stock 캐시 롤백
                 rollbackStockCache(stockCheckDto, i, ops);
 

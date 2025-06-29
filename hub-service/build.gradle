@@ -46,6 +46,8 @@ dependencies {
 	//redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.redisson:redisson-spring-boot-starter:3.41.0'
+	testImplementation 'it.ozimov:embedded-redis:0.7.3'
+
 
 	//kafka
 	implementation 'org.springframework.kafka:spring-kafka'
@@ -63,6 +65,9 @@ dependencies {
 	implementation project(':common')
 
 	implementation 'org.apache.httpcomponents:httpclient:4.5.13'
+
+	testCompileOnly 'org.projectlombok:lombok'
+	testAnnotationProcessor 'org.projectlombok:lombok'
 
 }
 

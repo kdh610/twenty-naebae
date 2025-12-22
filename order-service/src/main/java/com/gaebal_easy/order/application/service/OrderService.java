@@ -54,23 +54,23 @@ public class OrderService {
         orderRepository.save(order);
 
         try {
-            CheckStockResponse response = checkStock(dto, order);
+            Long response = checkStock(dto, order);
 
-            if(purchaseIsPossible(response)) {
-                // 허브에 선점했던 재고 확정 처리 요청. Kafka: Order -> Hub
-                kafkaTemplate.send("confirm_stock", "product_list", dto.getProducts());
-
-                // 업체에 orderId, receiver, supplier 전송. Kafka: Order -> Store
-                kafkaTemplate.send("order_create", "order", CreateOrderKafkaDto.builder()
-                        .orderId(order.getId())
-                        .supplierId(dto.getSupplierId())
-                        .receiverId(dto.getReceiverId())
-                        .products(dto.getProducts())
-                        .build());
-                if(needStockRefill(response)){
-                    kafkaTemplate.send("refill_stock","refill",  objectMapper.writeValueAsString(response));
-                }
-            }
+//            if(purchaseIsPossible(response)) {
+//                // 허브에 선점했던 재고 확정 처리 요청. Kafka: Order -> Hub
+//                kafkaTemplate.send("confirm_stock", "product_list", dto.getProducts());
+//
+//                // 업체에 orderId, receiver, supplier 전송. Kafka: Order -> Store
+//                kafkaTemplate.send("order_create", "order", CreateOrderKafkaDto.builder()
+//                        .orderId(order.getId())
+//                        .supplierId(dto.getSupplierId())
+//                        .receiverId(dto.getReceiverId())
+//                        .products(dto.getProducts())
+//                        .build());
+//                if(needStockRefill(response)){
+//                    kafkaTemplate.send("refill_stock","refill",  objectMapper.writeValueAsString(response));
+//                }
+//            }
 
         }catch(Exception e){
             throw new OrderFailExceiption(Code.ORDER_FAIL_EXCEIPTION);
@@ -92,14 +92,14 @@ public class OrderService {
      * @param order
      * @return
      */
-    private CheckStockResponse checkStock(CreateOrderDto dto, Order order) {
+    private Long checkStock(CreateOrderDto dto, Order order) {
         Object obj = hubClient.checkStock(CheckStockDto.builder()
                 .hubId(dto.getHubId())
                 .orderId(order.getId())
                 .products(dto.getProducts())
                 .build()).getBody();
 
-        CheckStockResponse response = objectMapper.convertValue(obj, CheckStockResponse.class);
+        Long response = objectMapper.convertValue(obj, Long.class);
         return response;
     }
 

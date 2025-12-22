@@ -19,8 +19,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.cache.CacheManager;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +79,27 @@ public class HubService {
     private HubProductList getHubProductList(UUID id){
         return hubProductListRepository.getProduct(id).orElseThrow(() -> new ProductNotFoundException(Code.HUB_PRODUCT_NOT_FOUND));
     }
+
+    private final RedisScript<Long> stockScript = RedisScript.of(
+            new ClassPathResource("scripts/stock_check.lua"),
+            Long.class
+    );
+
+    public Long checkStockAndDecrease(CheckStockDto checkStockDto){
+        List<CheckStokProductDto> products = checkStockDto.getProducts();
+        List<String> keys = products.stream()
+                .map(p -> "stock:" + p.getProductId())
+                .toList();
+        List<String> args = products.stream()
+            .map(p -> String.valueOf(p.getQuantity()))
+            .toList();
+
+        return redisTemplate.execute(stockScript, keys, args.toArray());
+    }
+
+
+
+
     @Transactional
     public CheckStockResponse checkStock(CheckStockDto stockCheckDto){
 

@@ -1,6 +1,5 @@
 package com.gaebal_easy.order.presentation.dto;
 
-import com.gaebal_easy.order.domain.entity.Order;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

@@ -11,6 +11,10 @@ for i, key in ipairs(KEYS) do
         return 0
     end
 
+end
+
+for i, key in ipairs(KEYS) do
+    local requestQuantity = tonumber(ARGV[i])
     redis.call('DECRBY', key, requestQuantity)
 end
 

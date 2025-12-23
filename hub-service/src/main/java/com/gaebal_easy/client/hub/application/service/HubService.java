@@ -39,7 +39,7 @@ public class HubService {
     private final HubRepository hubRepository;
     private final HubProductListRepository hubProductListRepository;
     private final RedisTemplate<String, String> redisTemplate;
-    private final ReservationRepository reservationRepository;
+
     private final KafkaTemplate<String,String> kafkaTemplate;
 
     public ProductResponseDto getProduct(UUID productId, UUID hubId) {
@@ -95,76 +95,6 @@ public class HubService {
             .toList();
 
         return redisTemplate.execute(stockScript, keys, args.toArray());
-    }
-
-
-
-
-    @Transactional
-    public CheckStockResponse checkStock(CheckStockDto stockCheckDto){
-
-        ArrayList<ReservationDto> reservations = new ArrayList<>();
-        ReservationState stockState = ReservationState.RESERVE;
-        ValueOperations<String, String> ops = redisTemplate.opsForValue();
-
-        for(int i=0; i<stockCheckDto.getProducts().size(); i++) {
-            CheckStokProductDto product = stockCheckDto.getProducts().get(i);
-            UUID productId = product.getProductId();
-
-            String cacheStock = ops.get("stock:" + productId);
-            if (cacheStock == null) {
-                // 캐싱 Miss
-                ProductResponseDto findProduct = getProduct(productId, stockCheckDto.getHubId());
-                Long stock = findProduct.getAmount();
-
-                ops.set("stock:" +productId, stock.toString());
-            }
-
-            // 재고 감소
-            Long tempStock = ops.decrement("stock:" + productId.toString(), product.getQuantity());
-
-            // 예약 생성
-            UUID reservationId = UUID.randomUUID();
-            Reservation reservation = Reservation.builder()
-                    .reservationId(reservationId)
-                    .orderId(stockCheckDto.getOrderId())
-                    .productId(productId)
-                    .quantity(product.getQuantity())
-                    .state(ReservationState.RESERVE)
-                    .build();
-
-            if(tempStock == 0L) {
-                stockState = ReservationState.RE_FILL;
-                reservations.add(ReservationDto.from(reservation));
-                reservation.changeState(ReservationState.RE_FILL);
-            }
-            else if (tempStock < 0L) {
-                // stock 캐시 롤백
-                rollbackStockCache(stockCheckDto, i, ops);
-
-                // order create 보상 트랜잭션
-                kafkaTemplate.send("out_of_stock","order-service", stockCheckDto.getOrderId().toString());
-
-                // reservation 테이블 롤백
-                throw new OutOfStockException(Code.OUT_OF_STOCK);
-            }
-
-            reservationRepository.save(reservation);
-        }
-
-        return CheckStockResponse.builder()
-                .reservations(reservations)
-                .state(stockState)
-                .build();
-    }
-
-    private static void rollbackStockCache(CheckStockDto stockCheckDto, int i, ValueOperations<String, String> ops) {
-        for(int j = 0; j< i +1; j++){
-            CheckStokProductDto rollbackProduct = stockCheckDto.getProducts().get(j);
-            UUID rollBakcProductId = rollbackProduct.getProductId();
-
-            ops.increment("stock:" + rollBakcProductId.toString(), rollbackProduct.getQuantity());
-        }
     }
 
 

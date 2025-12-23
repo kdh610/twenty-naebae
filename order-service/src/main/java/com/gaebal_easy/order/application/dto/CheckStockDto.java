@@ -1,6 +1,5 @@
 package com.gaebal_easy.order.application.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gaebal_easy.order.presentation.dto.ProductRequestDto;
 import lombok.*;
 
@@ -16,5 +15,5 @@ public class CheckStockDto {
 
     private List<ProductRequestDto> products;
     private UUID hubId;
-//    private UUID orderId;
+
 }

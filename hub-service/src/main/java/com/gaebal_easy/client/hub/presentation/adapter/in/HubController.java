@@ -88,8 +88,9 @@ public class HubController {
     @PostMapping("/products/stock")
     public ResponseEntity<?> checkStock(@RequestBody CheckStockDto stockCheckDto) {
         log.info("stockCheck {}", stockCheckDto.toString());
-        CheckStockResponse checkStockResponse = hubService.checkStock(stockCheckDto);
-        return ResponseEntity.ok(checkStockResponse);
+//        CheckStockResponse checkStockResponse = hubService.checkStock(stockCheckDto);
+        Long checkStockResult = hubService.checkStockAndDecrease(stockCheckDto);
+        return ResponseEntity.ok(checkStockResult);
     }
 
     @GetMapping("/route-feign")

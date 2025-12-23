@@ -19,7 +19,7 @@ public class RollbackOrderService {
 
     public void rollbackOrderCreate(UUID orderId){
         Order order = orderRepository.findById(orderId).orElseThrow(()->new OrderNotFoundException(Code.ORDER_NOT_FOUND_EXCEIPTION));
-        orderRepository.delete(order);
+//        orderRepository.delete(order);
 
     }
 

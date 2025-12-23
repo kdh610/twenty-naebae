@@ -1,7 +1,6 @@
 package com.gaebal_easy.order.domain.entity;
 
 
-import com.gaebal_easy.order.presentation.dto.ProductRequestDto;
 import gaebal_easy.common.global.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;

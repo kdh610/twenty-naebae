@@ -48,12 +48,7 @@ class HubStockTest {
     @Mock
     private HubProductListRepository hubProductListRepository;
     @Mock
-    private ReservationRepository reservationRepository;
-    @Mock
     private KafkaTemplate<String, String> kafkaTemplate;
-
-
-    CacheManager cacheManager;
 
     private RedisTemplate<String, String> redisTemplate;
     private RedisServer redisServer;
@@ -61,7 +56,10 @@ class HubStockTest {
     @BeforeEach
     void setUp() {
 
-        redisServer = new RedisServer(6379);
+        redisServer = RedisServer.builder()
+                .port(6379)
+                .setting("maxheap 128M")
+                .build();
         redisServer.start();
 
         LettuceConnectionFactory connectionFactory = new LettuceConnectionFactory("localhost", 6379);
@@ -77,7 +75,6 @@ class HubStockTest {
                 hubRepository,
                 hubProductListRepository,
                 redisTemplate, // <-- 실제 RedisTemplate
-                reservationRepository,
                 kafkaTemplate
         );
     }
@@ -89,12 +86,12 @@ class HubStockTest {
         }
     }
 
-
-
     @Test
     @DisplayName("데드락 test")
     @Transactional
     void test() throws InterruptedException {
+        redisTemplate.opsForValue().set("stock:6bc4dbbc-05d2-11f0-82d4-0242ac110004", "10000");
+        redisTemplate.opsForValue().set("stock:6bc5a25a-05d2-11f0-82d4-0242ac110004", "20000");
         int thred =2;
 
         ExecutorService executor = Executors.newFixedThreadPool(thred);
@@ -146,7 +143,7 @@ class HubStockTest {
             CheckStockDto finalCheck = check;
             executor.submit(() -> {
                 try {
-                    hubService.checkStock(finalCheck);
+                    hubService.checkStockAndDecrease(finalCheck);
                 } catch (Exception e) {
                     Assertions.assertThat("현재 해당 상품의 재고가 없습니다.").isEqualTo(e.getMessage());
                 } finally {
@@ -156,17 +153,16 @@ class HubStockTest {
         }
         latch.await();
 
-        Cache stockCache = cacheManager.getCache("stock");
-        Cache preemptionCache = cacheManager.getCache("preemption");
-        Long stock1 = Long.parseLong(stockCache.get("6bc4dbbc-05d2-11f0-82d4-0242ac110004", String.class));
-        Long preemption1 = Long.parseLong(preemptionCache.get("reserved:"+"6bc4dbbc-05d2-11f0-82d4-0242ac110004", String.class));
 
-        Long stock2 = Long.parseLong(stockCache.get("6bc5a25a-05d2-11f0-82d4-0242ac110004", String.class));
-        Long preemption2 = Long.parseLong(preemptionCache.get("reserved:"+"6bc5a25a-05d2-11f0-82d4-0242ac110004", String.class));
+        String stock1Str = redisTemplate.opsForValue().get("stock:6bc4dbbc-05d2-11f0-82d4-0242ac110004");
+        String stock2Str = redisTemplate.opsForValue().get("stock:6bc5a25a-05d2-11f0-82d4-0242ac110004");
+
+        Long stock1 = stock1Str != null ? Long.parseLong(stock1Str) : 0L;
+        Long stock2 = stock2Str != null ? Long.parseLong(stock2Str) : 0L;
 
         org.junit.jupiter.api.Assertions.assertAll(
-                () -> Assertions.assertThat(stock1-preemption1).isEqualTo(9970L),
-                () -> Assertions.assertThat(stock2-preemption2).isEqualTo(19970L)
+                () -> Assertions.assertThat(stock1).isEqualTo(9970L),
+                () -> Assertions.assertThat(stock2).isEqualTo(19970L)
         );
     }
 
@@ -219,7 +215,7 @@ class HubStockTest {
 
             executor.submit(() -> {
                 try {
-                    hubService.checkStock(check);
+                    hubService.checkStockAndDecrease(check);
                 } catch (Exception e) {
                     Assertions.assertThat("현재 해당 상품의 재고가 없습니다.").isEqualTo(e.getMessage());
                 } finally {
@@ -228,6 +224,17 @@ class HubStockTest {
             });
         }
         latch.await();
+        String finalStockA = ops.get(stockAKey);
+        String finalStockB = ops.get(stockBKey);
+
+        org.junit.jupiter.api.Assertions.assertAll(
+            // 상품 A는 충분했음에도, B 때문에 롤백되어 100개 그대로여야 함
+            () -> Assertions.assertThat(finalStockA).isEqualTo("100"),
+
+            // 상품 B는 차감 시도조차 못했거나(순서에 따라), 실패했으므로 1개 그대로여야 함
+            () -> Assertions.assertThat(finalStockB).isEqualTo("1")
+        );
+
     }
 
     @Test
@@ -237,7 +244,7 @@ class HubStockTest {
 
         int thread =10;
         long productAinitialStock = 100L;
-        long productBinitialStock = 2L;
+        long productBinitialStock = 20L;
         long quantityAPerRequest = 1;
         long quantityBPerRequest = 2;
         UUID productAId = UUID.fromString("6bc4dbbc-05d2-11f0-82d4-0242ac110004");
@@ -276,7 +283,7 @@ class HubStockTest {
 
             executor.submit(() -> {
                 try {
-                    hubService.checkStock(check);
+                    hubService.checkStockAndDecrease(check);
                 } catch (Exception e) {
 
                 } finally {
@@ -285,7 +292,7 @@ class HubStockTest {
             });
         }
         latch.await();
-        assertEquals("99", ops.get(stockAKey));
+        assertEquals("90", ops.get(stockAKey));
         assertEquals("0", ops.get(stockBKey));
     }
 
@@ -323,7 +330,7 @@ class HubStockTest {
 
             executor.submit(() -> {
                 try {
-                    hubService.checkStock(check);
+                    hubService.checkStockAndDecrease(check);
                 } catch (Exception e) {
                     Assertions.assertThat("현재 해당 상품의 재고가 없습니다.").isEqualTo(e.getMessage());
                 } finally {
@@ -335,7 +342,7 @@ class HubStockTest {
     }
 
     @Test
-    @DisplayName("재고가 100개인 상품을 100명의 사용자가 동시에 구매하여 재고가 0이된다")
+    @DisplayName("재고가 10000개인 상품을 10000명의 사용자가 동시에 구매하여 재고가 0이된다")
     @Transactional
     void concurrencyStockTest() throws InterruptedException {
         int thread =100;
@@ -367,7 +374,7 @@ class HubStockTest {
 
             executor.submit(() -> {
                 try {
-                    hubService.checkStock(check);
+                    hubService.checkStockAndDecrease(check);
                 } catch (Exception e) {
                     System.out.println(e.getMessage());
                 } finally {

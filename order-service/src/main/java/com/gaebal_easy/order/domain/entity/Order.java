@@ -54,14 +54,16 @@ public class Order extends BaseTimeEntity {
         if(orderProduct.getOrder() != this) {
             orderProduct.setOrder(this);
         }
+
+        this.totalPrice += orderProduct.calculatePrice();
     }
 
-    public static Order create(UUID supplier, UUID receiver, String orderRequest, String address, Long totalPrice){
+    public static Order create(UUID supplier, UUID receiver, String orderRequest, String address){
         return Order.builder()
                 .supplier(supplier)
                 .receiver(receiver)
                 .orderRequest(orderRequest)
-                .totalPrice(totalPrice)
+                .totalPrice(0L)
                 .address(address)
                 .build();
     }
@@ -69,8 +71,6 @@ public class Order extends BaseTimeEntity {
     public void changeAddress(String address) {
         this.address = address;
     }
-
-
 
 
 

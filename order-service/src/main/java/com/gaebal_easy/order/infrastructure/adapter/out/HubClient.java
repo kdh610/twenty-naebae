@@ -1,4 +1,4 @@
-package com.gaebal_easy.order.application.service;
+package com.gaebal_easy.order.infrastructure.adapter.out;
 
 import com.gaebal_easy.order.application.dto.CheckStockDto;
 import org.springframework.cloud.openfeign.FeignClient;

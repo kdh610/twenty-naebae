@@ -6,6 +6,7 @@ import com.gaebal_easy.order.domain.entity.Order;
 import com.gaebal_easy.order.domain.entity.OrderProduct;
 import com.gaebal_easy.order.domain.enums.ReservationState;
 import com.gaebal_easy.order.domain.repository.OrderRepository;
+import com.gaebal_easy.order.presentation.dto.CreateOrderRequest;
 import com.gaebal_easy.order.presentation.dto.ProductRequestDto;
 import gaebal_easy.common.global.exception.Code;
 import gaebal_easy.common.global.exception.OrderFailExceiption;
@@ -42,76 +43,61 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse createOrder(CreateOrderDto dto)  {
-        // 주문 생성
-        Long totalPrice = calculateTotalPrice(dto);
+    public OrderResponse processOrder(CreateOrderRequest dto)  {
+        Long stockStatus = checkStock(dto);
 
-        Order order = Order.create(dto.getSupplierId(), dto.getReceiverId(), dto.getOrderRequest(), dto.getAddress(), totalPrice);
-        for(ProductRequestDto product: dto.getProducts()){
-            OrderProduct orderProduct = OrderProduct.create(product.getProductId(), product.getQuantity());
-            order.addOrderProduct(orderProduct);
-        }
-        orderRepository.save(order);
-
-        try {
-            Long response = checkStock(dto, order);
-
-//            if(purchaseIsPossible(response)) {
-//                // 허브에 선점했던 재고 확정 처리 요청. Kafka: Order -> Hub
-//                kafkaTemplate.send("confirm_stock", "product_list", dto.getProducts());
-//
-//                // 업체에 orderId, receiver, supplier 전송. Kafka: Order -> Store
-//                kafkaTemplate.send("order_create", "order", CreateOrderKafkaDto.builder()
-//                        .orderId(order.getId())
-//                        .supplierId(dto.getSupplierId())
-//                        .receiverId(dto.getReceiverId())
-//                        .products(dto.getProducts())
-//                        .build());
-//                if(needStockRefill(response)){
-//                    kafkaTemplate.send("refill_stock","refill",  objectMapper.writeValueAsString(response));
-//                }
-//            }
-
-        }catch(Exception e){
+        if(stockStatus == -1){
             throw new OrderFailExceiption(Code.ORDER_FAIL_EXCEIPTION);
         }
+
+        Order order = createOrder(dto);
+
+
+        // 허브에 선점했던 재고 확정 처리 요청. Kafka: Order -> Hub
+        kafkaTemplate.send("confirm_stock", "product_list", dto.getProducts());
+
+        // 업체에 orderId, receiver, supplier 전송. Kafka: Order -> Store
+        kafkaTemplate.send("order_create", "order", CreateOrderKafkaDto.builder()
+                .orderId(order.getId())
+                .supplierId(dto.getSupplierId())
+                .receiverId(dto.getReceiverId())
+                .products(dto.getProducts())
+                .build());
+
+
+        kafkaTemplate.send("refill_stock","refill",  objectMapper.writeValueAsString(response));
+
+
+
         return OrderResponse.from(order);
     }
 
-    private static boolean needStockRefill(CheckStockResponse response) {
-        return response.getState().equals(ReservationState.RE_FILL);
+    private Order createOrder(CreateOrderRequest orderRequest) {
+
+        Order order =Order.create(orderRequest.getSupplierId(), orderRequest.getReceiverId(), orderRequest.getOrderRequest(), orderRequest.getAddress());
+        for(ProductRequestDto product: orderRequest.getProducts()){
+            OrderProduct orderProduct = OrderProduct.create(product.getProductId(), product.getPrice(), product.getQuantity());
+            order.addOrderProduct(orderProduct);
+        }
+        orderRepository.save(order);
+        return order;
     }
 
-    private static boolean purchaseIsPossible(CheckStockResponse response) {
-        return !response.getState().equals(ReservationState.OUT_OF_STOCK);
-    }
+
 
     /**
      * 재고확인 FeignClient order -> hub
      * @param dto
-     * @param order
      * @return
      */
-    private Long checkStock(CreateOrderDto dto, Order order) {
+    private Long checkStock(CreateOrderRequest dto) {
         Object obj = hubClient.checkStock(CheckStockDto.builder()
                 .hubId(dto.getHubId())
-                .orderId(order.getId())
                 .products(dto.getProducts())
                 .build()).getBody();
 
-        Long response = objectMapper.convertValue(obj, Long.class);
-        return response;
+        return objectMapper.convertValue(obj, Long.class);
     }
-
-    private static Long calculateTotalPrice(CreateOrderDto dto) {
-        Long totalPrice = 0L;
-        for(ProductRequestDto product : dto.getProducts()){
-            totalPrice+=(product.getPrice() * product.getQuantity());
-        }
-        return totalPrice;
-    }
-
-
 
 
 }

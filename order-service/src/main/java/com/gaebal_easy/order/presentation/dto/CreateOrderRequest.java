@@ -1,6 +1,6 @@
 package com.gaebal_easy.order.presentation.dto;
 
-import com.gaebal_easy.order.application.dto.CreateOrderDto;
+import com.gaebal_easy.order.domain.entity.Order;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,8 +23,5 @@ public class CreateOrderRequest {
     private String address;
 
 
-    public CreateOrderDto toDto() {
-        return CreateOrderDto.create(this.hubId, this.products, this.orderRequest, this.receiverId, this.supplierId, this.address);
-    }
 
 }

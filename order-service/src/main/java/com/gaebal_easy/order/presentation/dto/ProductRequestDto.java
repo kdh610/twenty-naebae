@@ -17,4 +17,6 @@ public class ProductRequestDto {
     private String productName;
     private Long quantity;
     private Long price;
+
+
 }

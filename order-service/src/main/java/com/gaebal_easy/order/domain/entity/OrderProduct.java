@@ -25,12 +25,16 @@ public class OrderProduct {
     @Column(name = "product_id")
     private UUID productId;
 
+    @Column(name = "price")
+    private Long price;
+
     @Column(name = "quantity")
     private Long quantity;
 
-    public static OrderProduct create(UUID productId, Long quantity){
+    public static OrderProduct create(UUID productId, Long price, Long quantity){
         return OrderProduct.builder()
                 .productId(productId)
+                .price(price)
                 .quantity(quantity)
                 .build();
     }
@@ -43,6 +47,9 @@ public class OrderProduct {
         this.order.getOrderProducts().add(this);
     }
 
+    public Long calculatePrice(){
+        return this.price * this.quantity;
+    }
 
 
 }

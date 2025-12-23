@@ -16,5 +16,5 @@ public class CheckStockDto {
 
     private List<ProductRequestDto> products;
     private UUID hubId;
-    private UUID orderId;
+//    private UUID orderId;
 }
